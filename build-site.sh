@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p .build-supabase dist/vendor
-
+mkdir -p build-supabase dist/vendor
 cd build-supabase
 npm init -y
 npm install --save-exact \
