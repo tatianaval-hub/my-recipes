@@ -3,7 +3,7 @@ set -euo pipefail
 
 mkdir -p .build-supabase dist/vendor
 
-cd .build-supabase
+cd build-supabase
 npm init -y
 npm install --save-exact \
   @supabase/supabase-js@2.118.0 \
