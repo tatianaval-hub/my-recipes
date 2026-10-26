@@ -110,7 +110,24 @@
   if(e.target.dataset.share)shareRecipe(e.target.dataset.share);
 });
 
-    const {data:{session}}=await supabase.auth.getSession();await onSession(session);supabase.auth.onAuthStateChange((_e,s)=>onSession(s));
+    function showSessionError(error) {
+  console.error('Ошибка запуска или синхронизации:', error);
+
+  const text = error?.message || String(error);
+
+  if (currentUser) {
+    status('Ошибка синхронизации: ' + text);
+  } else {
+    msg('Не удалось выполнить вход: ' + text, 'error');
+  }
+}
+
+// Не выполняем запросы к Supabase внутри обработчика события.
+supabase.auth.onAuthStateChange((_event, session) => {
+  setTimeout(() => {
+    onSession(session).catch(showSessionError);
+  }, 0);
+});
   </script>
 </body>
 </html>
