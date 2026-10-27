@@ -14,6 +14,7 @@ printf '%s\n' \
 
 ./node_modules/.bin/esbuild entry.js \
   --bundle \
+  --minify \
   --platform=browser \
   --format=esm \
   --target=es2022 \
