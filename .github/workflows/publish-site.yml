@@ -1,113 +1,64 @@
 name: Build and publish recipes
-
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: pages
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Download repository
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-
       - name: Build local Supabase library
         shell: bash
         run: |
           set -euo pipefail
-
           mkdir -p build-input dist/vendor
           cd build-input
-
           npm init -y
-          npm install --save-exact \
-            @supabase/supabase-js@2.118.0 \
-            esbuild@0.25.0
-
-          printf '%s\n' \
-            'export { createClient } from "@supabase/supabase-js";' \
-            > entry.js
-
-          ./node_modules/.bin/esbuild entry.js \
-            --bundle \
-            --platform=browser \
-            --format=esm \
-            --target=es2022 \
-            --legal-comments=inline \
-            --metafile=meta.json \
-            --outfile=../dist/vendor/supabase.js
-
+          npm install --save-exact @supabase/supabase-js@2.118.0 esbuild@0.25.0
+          printf '%s\n' 'export { createClient } from "@supabase/supabase-js";' > entry.js
+          ./node_modules/.bin/esbuild entry.js --bundle --platform=browser --format=esm --target=es2022 --legal-comments=inline --metafile=meta.json --outfile=../dist/vendor/supabase.js
           node --input-type=module <<'JS'
           import fs from 'node:fs';
-          const meta = JSON.parse(fs.readFileSync('meta.json', 'utf8'));
-          for (const output of Object.values(meta.outputs)) {
-            for (const dependency of output.imports) {
-              if (dependency.external) {
-                throw new Error('External dependency: ' + dependency.path);
-              }
-            }
-          }
+          const meta=JSON.parse(fs.readFileSync('meta.json','utf8'));
+          for(const output of Object.values(meta.outputs))for(const dependency of output.imports)if(dependency.external)throw new Error('External dependency: '+dependency.path);
           JS
-
           cp package-lock.json ../dist/vendor/build-package-lock.json
-
-      - name: Prepare updated HTML
+      - name: Prepare full recipe app and check syntax
         shell: bash
         run: |
+          set -euo pipefail
+          node --check prepare-full-version.mjs
+          node prepare-full-version.mjs
           node --input-type=module <<'JS'
           import fs from 'node:fs';
-
-          const source = fs.readFileSync('index.html', 'utf8');
-          const oldImport =
-            "import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';";
-
-          if (source.split(oldImport).length !== 2) {
-            throw new Error(
-              'Expected exactly one Supabase import. Review index.html.'
-            );
-          }
-
-          const html = source.replace(
-            oldImport,
-            "import { createClient } from './vendor/supabase.js';"
-          );
-
-          if (html.includes('esm.sh/')) {
-            throw new Error('An esm.sh dependency remains in index.html.');
-          }
-
-          fs.writeFileSync('dist/index.html', html);
+          const html=fs.readFileSync('dist/index.html','utf8');
+          const modules=[...html.matchAll(/<script\b[^>]*\btype\s*=\s*["']module["'][^>]*>([\s\S]*?)<\/script\s*>/gi)];
+          if(modules.length!==1)throw new Error('Expected one application module.');
+          fs.writeFileSync('build-input/app-check.mjs',modules[0][1]);
           JS
-
+          node --check build-input/app-check.mjs
       - name: Upload website
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
-
   deploy:
     needs: build
     runs-on: ubuntu-latest
-
     permissions:
       pages: write
       id-token: write
-
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Publish website
         id: deployment
