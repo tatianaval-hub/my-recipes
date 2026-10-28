@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Книга рецептов — проверка подключения</title>
+<style>body{font:17px system-ui;margin:0;background:#f8f6f1;color:#252525}main{max-width:700px;margin:40px auto;padding:24px}input,button{box-sizing:border-box;font:inherit;padding:12px;border:1px solid #ccc;border-radius:8px}input{display:block;width:100%;margin:8px 0 16px}button{cursor:pointer;background:#a43e28;color:white}button:disabled{opacity:.5}#status{white-space:pre-wrap;padding:16px;background:white;border-radius:8px}li{padding:8px}label{display:block}[hidden]{display:none!important}</style>
+<main>
+<h1>Книга рецептов</h1>
+<p>Тест новой площадки. Данные не изменяются. Внешние библиотеки не используются.</p>
+<p id="status" role="status">HTML загружен. Ожидание JavaScript…</p>
+<form id="login">
+<label>E-mail<input id="email" type="email" autocomplete="username" required></label>
+<label>Пароль<input id="password" type="password" autocomplete="current-password" required></label>
+<button id="submit">Войти и прочитать рецепты</button>
+</form>
+<section id="result" hidden><h2>Рецепты</h2><p id="summary"></p><ul id="recipes"></ul><button id="logout" type="button">Закрыть тестовую сессию</button></section>
+<noscript>Для проверки входа включите JavaScript.</noscript>
+</main>
+<script>
+'use strict';
+const base='https://ybkfrftifgpntfppqudd.supabase.co';
+const key='sb_publishable_GVUJTtt6xO5HCWRH6_62fw_8GuC2oRd';
+const $=id=>document.getElementById(id);
+let token=null;
+function status(text){$('status').textContent=text;}
+async function request(path,options={}){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),25000);
+  try{
+    const response=await fetch(base+path,{...options,signal:controller.signal,cache:'no-store'});
+    const text=await response.text();
+    let data;
+    try{data=text?JSON.parse(text):null;}catch{throw new Error('Ответ сервера не является JSON. HTTP '+response.status);}
+    if(!response.ok)throw new Error('HTTP '+response.status+': '+(data?.msg||data?.message||data?.error_description||data?.error||'Ошибка запроса'));
+    return data;
+  }catch(error){
+    if(error.name==='AbortError')throw new Error('Сервер не завершил ответ за 25 секунд.');
+    throw error;
+  }finally{clearTimeout(timer);}
+}
+$('login').addEventListener('submit',async event=>{
+  event.preventDefault();
+  $('submit').disabled=true;
+  let stage='Вход';
+  token=null;
+  $('result').hidden=true;
+  $('recipes').replaceChildren();
+  status('Страница работает. Проверяем вход в Supabase…');
+  try{
+    const auth=await request('/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email:$('email').value.trim(),password:$('password').value})});
+    $('password').value='';
+    if(!auth?.access_token)throw new Error('В ответе нет токена доступа.');
+    token=auth.access_token;
+    stage='Чтение рецептов';
+    status('Вход выполнен. Читаем до 50 рецептов…');
+    const rows=await request('/rest/v1/recipes?select=id,title&order=updated_at.desc&limit=50',{headers:{apikey:key,Authorization:'Bearer '+token}});
+    if(!Array.isArray(rows))throw new Error('Ожидался список рецептов.');
+    for(const row of rows){const li=document.createElement('li');li.textContent=row.title||'Без названия';$('recipes').append(li);}
+    $('summary').textContent=rows.length?'Получено рецептов: '+rows.length+' (не более 50).':'Запрос выполнен, но доступных рецептов не получено. Это не доказывает отсутствие данных в базе.';
+    $('result').hidden=false;
+    $('login').hidden=true;
+    status('Проверка завершена: вход и чтение работают. Рецепты не изменялись.');
+  }catch(error){
+    token=null;
+    status(stage+': '+error.message+'\nПароль и токен присылать не нужно.');
+  }finally{
+    $('password').value='';
+    $('submit').disabled=false;
+  }
+});
+$('logout').addEventListener('click',()=>{
+  token=null;
+  $('recipes').replaceChildren();
+  $('result').hidden=true;
+  $('login').hidden=false;
+  status('Локальная тестовая сессия закрыта. Токен удалён из памяти страницы.');
+});
+status('HTML и JavaScript загружены. Введите существующие данные входа.');
+</script>
+</html>
