@@ -79,7 +79,7 @@ const start=html.indexOf('    async function load(){');
 const end=html.indexOf('    function clear()',start);
 if(start<0||end<0)throw new Error('Load function boundaries not found.');
 html=html.slice(0,start)+helpers+'\n'+html.slice(end);
-replaceOnce('function edit(id){','function showEditor(id){');
+replaceOnce('function edit(id){const r=recipes.find(x=>x.id===id);','function showEditor(id){const r=recipes.find(x=>x.id===id);');
 replaceOnce('function detail(id)\n','function showDetail(id)\n');
 replaceOnce('async function shareRecipe(id){','async function shareLoadedRecipe(id){');
 const sessionStart=html.indexOf('    async function onSession(s){');
